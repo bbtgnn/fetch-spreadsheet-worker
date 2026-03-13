@@ -1,18 +1,59 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
-
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
+		const url = new URL(request.url);
+
+		// Handle CORS preflight
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type',
+				},
+			});
+		}
+
+		if (request.method !== 'GET') {
+			return new Response('Method Not Allowed', {
+				status: 405,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type',
+				},
+			});
+		}
+
+		const id = url.searchParams.get('id');
+		const gid = url.searchParams.get('gid') ?? '0';
+
+		if (!id) {
+			return new Response('Missing required query parameter "id".', {
+				status: 400,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type',
+					'Content-Type': 'text/plain; charset=utf-8',
+				},
+			});
+		}
+
+		const cacheBuster = Date.now();
+		const sheetsUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&tq&gid=${gid}&_=${cacheBuster}`;
+
+		const upstream = await fetch(sheetsUrl);
+		const body = await upstream.text();
+
+		return new Response(body, {
+			status: upstream.status,
+			headers: {
+				'Content-Type': 'text/plain; charset=utf-8',
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Methods': 'GET, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type',
+			},
+		});
 	},
 } satisfies ExportedHandler<Env>;
